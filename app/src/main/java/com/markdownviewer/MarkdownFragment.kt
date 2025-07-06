@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.markdownviewer.databinding.FragmentMarkdownBinding
@@ -52,26 +51,16 @@ class MarkdownFragment : Fragment() {
         val editButton = binding.editButton
         val editText = binding.editTextMarkdown
         val mdView = binding.mdView
-        var loadedContent: String? = null
         if (fileUri != null) {
             try {
-                val app = requireActivity().application as App
-                val savedContent = app.downloadViewModel.getDownloadedContent()
-                val savedUri = app.downloadViewModel.getDownloadedUri()
-                val shouldUseSavedContent = savedContent != null && savedUri == fileUri
-                
-                if (shouldUseSavedContent) {
-                    loadedContent = savedContent ?: ""
-                    mdView.setMarkdown(loadedContent)
+                currentMarkdown = readFileFromUri(fileUri)
+                if (currentMarkdown.isNotEmpty()) {
+                    mdView.setMarkdown(currentMarkdown)
+                    editText.setText(currentMarkdown)
+                    val app = requireActivity().application as App
+                    app.downloadViewModel.notifyDownloadComplete(fileUri, currentMarkdown)
                 } else {
-                    val content = readFileFromUri(fileUri)
-                    loadedContent = content
-                    if (content.isNotEmpty()) {
-                        mdView.setMarkdown(content)
-                        app.downloadViewModel.notifyDownloadComplete(fileUri, content)
-                    } else {
-                        Toast.makeText(context, "File error", Toast.LENGTH_SHORT).show()
-                    }
+                    Toast.makeText(context, "File error", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "File read error:: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -80,30 +69,22 @@ class MarkdownFragment : Fragment() {
             Toast.makeText(context, "File URI not found", Toast.LENGTH_SHORT).show()
         }
 
-        // Кнопка Edit
         editButton.setOnClickListener {
             mdView.visibility = View.GONE
             editText.visibility = View.VISIBLE
             editButton.visibility = View.GONE
-            editText.setText(loadedContent ?: "")
-            // Показать кнопку Save
-            if (binding.root.findViewById<Button>(R.id.saveButton) == null) {
-                val saveBtn = Button(requireContext())
-                saveBtn.id = R.id.saveButton
-                saveBtn.text = "Save"
-                (binding.root as ViewGroup).addView(saveBtn, 2) // после editText
-                saveBtn.setOnClickListener {
-                    val newText = editText.text.toString()
-                    // TODO: сохранить обратно в файл
-                    mdView.setMarkdown(newText)
-                    mdView.visibility = View.VISIBLE
-                    editText.visibility = View.GONE
-                    saveBtn.visibility = View.GONE
-                    editButton.visibility = View.VISIBLE
-                }
-            } else {
-                binding.root.findViewById<Button>(R.id.saveButton).visibility = View.VISIBLE
-            }
+            editText.setText(currentMarkdown)
+            binding.saveButton.visibility = View.VISIBLE
+        }
+
+        binding.saveButton.setOnClickListener {
+            val newText = editText.text.toString()
+            currentMarkdown = newText
+            mdView.setMarkdown(newText)
+            mdView.visibility = View.VISIBLE
+            editText.visibility = View.GONE
+            binding.saveButton.visibility = View.GONE
+            editButton.visibility = View.VISIBLE
         }
     }
 
@@ -124,15 +105,17 @@ class MarkdownFragment : Fragment() {
         } ?: ""
     }
 
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
     }
     fun updateContent(fileUri: Uri) {
         try {
-            val content = readFileFromUri(fileUri)
-            if (content.isNotEmpty()) {
-                binding.mdView.setMarkdown(content)
+            currentMarkdown = readFileFromUri(fileUri)
+            if (currentMarkdown.isNotEmpty()) {
+                binding.mdView.setMarkdown(currentMarkdown)
+                binding.editTextMarkdown.setText(currentMarkdown)
             } else {
                 Toast.makeText(context, "File error", Toast.LENGTH_SHORT).show()
             }
