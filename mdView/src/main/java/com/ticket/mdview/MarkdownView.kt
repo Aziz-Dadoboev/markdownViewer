@@ -356,20 +356,17 @@ class MarkdownView @JvmOverloads constructor(
         return tv
     }
 
-    // Простая поддержка только стандартных markdown-таблиц
     private fun tryParseSimpleTable(lines: List<String>, start: Int): Pair<TableLayout?, Int> {
         var i = start
         if (i + 2 > lines.size) return Pair(null, 0)
         val headerLine = lines[i].trim()
         val sepLine = lines.getOrNull(i + 1)?.trim() ?: return Pair(null, 0)
-        // Проверяем формат: | ... | и |---|---|
         if (!headerLine.startsWith("|") || !headerLine.endsWith("|")) return Pair(null, 0)
         if (!sepLine.startsWith("|") || !sepLine.endsWith("|")) return Pair(null, 0)
         if (!sepLine.replace("-", "").replace("|", "").trim().isEmpty()) return Pair(null, 0)
-        // Парсим заголовки
         val headers = headerLine.split("|").map { it.trim() }.filter { it.isNotEmpty() }
         val columnsCount = headers.size
-        // Парсим строки данных
+
         val dataRows = mutableListOf<List<String>>()
         i += 2
         while (i < lines.size) {
@@ -381,7 +378,6 @@ class MarkdownView @JvmOverloads constructor(
             i++
         }
         if (dataRows.isEmpty()) return Pair(null, 0)
-        // Создаём TableLayout
         val table = TableLayout(context)
         table.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         // Заголовок
