@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="codeBlock">#232323</color>
+    <color name="tableBg">#181818</color>
+    <color name="codeText">#bbbbbb</color>
+    <color name="formulaText">#90caf9</color>
+    <color name="quoteText">#aaaaaa</color>
+    <color name="hrLine">#444444</color>
+</resources>

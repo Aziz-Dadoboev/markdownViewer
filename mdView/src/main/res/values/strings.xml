@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="f8f8f8">#f8f8f8</string>
+    <string name="image">[image: %1$s]</string>
+    <string name="item">• %1$s</string>
+    <string name="num_item">%1$d. %2$s</string>
+</resources>

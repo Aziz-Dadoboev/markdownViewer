@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "markdownViewer"
 include(":app")
+include(":mdView")
