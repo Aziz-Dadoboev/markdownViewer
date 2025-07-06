@@ -38,6 +38,12 @@ class MarkdownView @JvmOverloads constructor(
         var i = 0
         while (i < lines.size) {
             val line = lines[i]
+            val (table, skipT) = tryParseSimpleTable(lines, i)
+            if (table != null) {
+                addView(table)
+                i += skipT
+                continue
+            }
             when {
                 line.trim().isEmpty() -> {
                     addView(createEmptyLine())
@@ -77,11 +83,6 @@ class MarkdownView @JvmOverloads constructor(
                     addView(codeView)
                     i += skip
                 }
-                line.trim().startsWith("| ") -> {
-                    val (lineBlockView, skip) = parseLineBlock(lines, i)
-                    addView(lineBlockView)
-                    i += skip
-                }
                 line.trim().startsWith("!") -> {
                     addView(createImage(line))
                     i++
@@ -89,11 +90,6 @@ class MarkdownView @JvmOverloads constructor(
                 line.trim().startsWith("$") -> {
                     addView(createFormula(line))
                     i++
-                }
-                isTableLine(line) -> {
-                    val (tableView, skip) = parseTableTableLayout(lines, i)
-                    addView(tableView)
-                    i += skip
                 }
                 else -> {
                     addView(createParagraph(line))
@@ -284,20 +280,6 @@ class MarkdownView @JvmOverloads constructor(
         return Pair(tv, i - start)
     }
 
-    private fun parseLineBlock(lines: List<String>, start: Int): Pair<LinearLayout, Int> {
-        val layout = LinearLayout(context)
-        layout.orientation = VERTICAL
-        var i = start
-        while (i < lines.size && lines[i].trim().startsWith("| ")) {
-            val tv = TextView(context)
-            tv.text = lines[i].trim().drop(2)
-            tv.setTypeface(null, Typeface.ITALIC)
-            layout.addView(tv)
-            i++
-        }
-        return Pair(layout, i - start)
-    }
-
     private fun createImage(line: String): View {
         // ![alt](url "title")
         val regex = Regex("!\\[(.*?)]\\((.*?)(?:\\s+\"(.*?)\")?\\)")
@@ -373,97 +355,53 @@ class MarkdownView @JvmOverloads constructor(
         return tv
     }
 
-    private fun isTableLine(line: String): Boolean {
-        return line.contains("|") || (line.contains("  ") && line.contains("---"))
-    }
-
-    private fun parseTableTableLayout(lines: List<String>, start: Int): Pair<TableLayout, Int> {
-        val table = TableLayout(context)
-        table.setBackgroundColor(ContextCompat.getColor(context, R.color.tableBg))
-        table.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-        val rows = mutableListOf<List<String>>()
+    private fun tryParseSimpleTable(lines: List<String>, start: Int): Pair<TableLayout?, Int> {
         var i = start
-        var columnsCount = 0
-        var colStarts: IntArray? = null
+        if (i + 2 > lines.size) return Pair(null, 0)
+        val headerLine = lines[i].trim()
+        val sepLine = lines.getOrNull(i + 1)?.trim() ?: return Pair(null, 0)
+        if (!headerLine.startsWith("|") || !headerLine.endsWith("|")) return Pair(null, 0)
+        if (!sepLine.startsWith("|") || !sepLine.endsWith("|")) return Pair(null, 0)
+        if (!sepLine.replace("-", "").replace("|", "").trim().isEmpty()) return Pair(null, 0)
+        val headers = headerLine.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+        val columnsCount = headers.size
 
-        while (i < lines.size && (lines[i].contains("|") || lines[i].contains("  "))) {
-            val line = lines[i].trimEnd()
-            if (line.isEmpty()) break
-            if (line.matches(Regex("^[-| ]+$"))) {
-                i++
-                continue
-            }
-            if (line.contains("|")) {
-                val cells = line.split("|").map { it.trim() }
-                if (cells.size > columnsCount) columnsCount = cells.size
-                rows.add(cells)
-            } else {
-                if (colStarts == null) {
-                    val matcher = Regex("\\S+").findAll(line)
-                    colStarts = matcher.map { it.range.first }.toList().toIntArray()
-                    columnsCount = colStarts.size
-                }
-                val cells = mutableListOf<String>()
-                for (c in 0 until columnsCount) {
-                    val startC = colStarts[c]
-                    val end = if (c + 1 < columnsCount) colStarts[c + 1] else line.length
-                    val cell = if (startC < line.length) line.substring(startC, end).trim() else ""
-                    cells.add(cell)
-                }
-                rows.add(cells)
-            }
+        val dataRows = mutableListOf<List<String>>()
+        i += 2
+        while (i < lines.size) {
+            val line = lines[i].trim()
+            if (!line.startsWith("|") || !line.endsWith("|")) break
+            val cells = line.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+            if (cells.size != columnsCount) break
+            dataRows.add(cells)
             i++
-
-            while (i < lines.size && lines[i].startsWith(" ")) {
-                val cont = lines[i].trimEnd()
-                if (rows.isNotEmpty()) {
-                    val lastRow = rows.last().toMutableList()
-                    if (lastRow.isNotEmpty()) {
-                        lastRow[lastRow.size - 1] = lastRow.last() + "\n" + cont.trim()
-                        rows[rows.size - 1] = lastRow
-                    }
-                }
-                i++
-            }
         }
-
-        val paint = TextView(context).paint
-        val maxWidths = IntArray(columnsCount) { 0 }
-        for (row in rows) {
-            for (j in row.indices) {
-                val width = paint.measureText(row[j]).toInt()
-                if (width > maxWidths[j]) maxWidths[j] = width
-            }
+        if (dataRows.isEmpty()) return Pair(null, 0)
+        val table = TableLayout(context)
+        table.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        // Заголовок
+        val headerRow = TableRow(context)
+        for (h in headers) {
+            val tv = TextView(context)
+            tv.text = h
+            tv.setTypeface(null, Typeface.BOLD)
+            tv.setPadding(8, 8, 8, 8)
+            tv.gravity = Gravity.CENTER
+            headerRow.addView(tv)
         }
-
-        for (j in maxWidths.indices) {
-            maxWidths[j] += 32
-        }
-
-        var headerParsed = false
-        for (rowCells in rows) {
-            val row = TableRow(context)
-            row.layoutParams = TableLayout.LayoutParams(
-                TableLayout.LayoutParams.MATCH_PARENT,
-                TableLayout.LayoutParams.WRAP_CONTENT
-            )
-            for (j in 0 until columnsCount) {
+        table.addView(headerRow)
+        // Данные
+        for (row in dataRows) {
+            val tableRow = TableRow(context)
+            for (cell in row) {
                 val tv = TextView(context)
-                val text = if (j < rowCells.size) rowCells[j] else ""
-                tv.text = text
+                tv.text = cell
                 tv.setPadding(8, 8, 8, 8)
                 tv.gravity = Gravity.CENTER
-                tv.setSingleLine(false)
-                tv.maxLines = Integer.MAX_VALUE
-                tv.ellipsize = null
-                if (!headerParsed) tv.setTypeface(null, Typeface.BOLD)
-                val params = TableRow.LayoutParams(maxWidths[j], TableRow.LayoutParams.WRAP_CONTENT)
-                tv.layoutParams = params
-                row.addView(tv)
+                tableRow.addView(tv)
             }
-            table.addView(row)
-            if (!headerParsed) headerParsed = true
+            table.addView(tableRow)
         }
-        return Pair(table, rows.size)
+        return Pair(table, 2 + dataRows.size)
     }
 }
