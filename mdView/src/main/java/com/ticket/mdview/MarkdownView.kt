@@ -38,7 +38,6 @@ class MarkdownView @JvmOverloads constructor(
         var i = 0
         while (i < lines.size) {
             val line = lines[i]
-            // Попытка распознать простую таблицу
             val (table, skipT) = tryParseSimpleTable(lines, i)
             if (table != null) {
                 addView(table)
