@@ -17,7 +17,8 @@ class DownloadCompletedReceiver: BroadcastReceiver() {
             val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
 
             if (id != -1L) {
-                val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val downloadManager =
+                    context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 val query = DownloadManager.Query().setFilterById(id)
                 val cursor = downloadManager.query(query)
 
@@ -31,38 +32,29 @@ class DownloadCompletedReceiver: BroadcastReceiver() {
                         if (status == DownloadManager.STATUS_SUCCESSFUL) {
                             val uriString = cursor.getString(uriColumnIndex)
                             val fileUri = Uri.parse(uriString)
-                            val localUriColumnIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                            val localUriColumnIndex =
+                                cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
                             if (localUriColumnIndex != -1) {
                                 val localUriString = cursor.getString(localUriColumnIndex)
                                 Log.d("DownloadReceiver", "File saved at: $localUriString")
                             }
-                            
+
                             val content = readFileFromUri(context, fileUri)
-                            Log.d("DownloadReceiver", "File content read successfully, length: ${content.length}")
-                            
+                            Log.d(
+                                "DownloadReceiver",
+                                "File content read successfully, length: ${content.length}"
+                            )
+
                             try {
                                 val app = context.applicationContext as App
                                 app.downloadViewModel.notifyDownloadComplete(fileUri, content)
                             } catch (e: Exception) {
                                 Log.e("DownloadReceiver", "Error notifying ViewModel", e)
                             }
-                        } else {
-                            Log.d("DownloadReceiver", "Download failed with status: $status")
                         }
-                    } else {
-                        Log.d("DownloadReceiver", "Column not found")
                     }
-                } else {
-                    Log.d("DownloadReceiver", "Cursor is empty")
                 }
-                cursor.close()
-            } else {
-                Log.d("DownloadReceiver", "Invalid download ID")
             }
-        } else {
-            Log.d("DownloadReceiver", "Action is not DOWNLOAD_COMPLETE or context is null")
-            Log.d("DownloadReceiver", "Action: ${intent?.action}")
-            Log.d("DownloadReceiver", "Context: $context")
         }
     }
 

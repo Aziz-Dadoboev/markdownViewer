@@ -9,9 +9,6 @@ class DownloadViewModel : ViewModel() {
     private val _downloadComplete = MutableLiveData<Uri>()
     val downloadComplete: LiveData<Uri> = _downloadComplete
 
-    private val _fileSelected = MutableLiveData<Uri>()
-    val fileSelected: LiveData<Uri> = _fileSelected
-
     private var downloadedContent: String? = null
     private var downloadedUri: Uri? = null
 
@@ -20,16 +17,6 @@ class DownloadViewModel : ViewModel() {
         downloadedContent = content
         _downloadComplete.postValue(fileUri)
     }
-    fun notifyFileSelected(fileUri: Uri) {
-        _fileSelected.postValue(fileUri)
-    }
 
-    fun getDownloadedContent(): String? {
-        return downloadedContent
-    }
-
-    fun getDownloadedUri(): Uri? {
-        return downloadedUri
-    }
 }
 
