@@ -9,9 +9,10 @@ import android.text.Spanned
 import android.text.TextPaint
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
-import android.text.style.ForegroundColorSpan
+import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
+import android.text.style.UnderlineSpan
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
@@ -67,7 +68,7 @@ class MarkdownView @JvmOverloads constructor(
                     addView(quoteView)
                     i += skip
                 }
-                line.trim().startsWith("---") || line.trim().startsWith("***") -> {
+                line.trim().startsWith("---") -> {
                     addView(createHorizontalRule())
                     i++
                 }
@@ -125,7 +126,10 @@ class MarkdownView @JvmOverloads constructor(
                 1 -> 26f
                 2 -> 22f
                 3 -> 18f
-                else -> 16f
+                4 -> 16f
+                5 -> 15f
+                6 -> 14f
+                else -> 14f
             }
             Pair(tv, 1)
         } else {
@@ -155,112 +159,38 @@ class MarkdownView @JvmOverloads constructor(
     }
 
     private fun parseInline(text: String, textView: TextView? = null): CharSequence {
-        val builder = android.text.SpannableStringBuilder(text)
-        // bold
-        val bold = Regex("\\*\\*(.+?)\\*\\*")
-        bold.findAll(builder).toList().asReversed().forEach {
-            val start = it.range.first
-            val end = it.range.last + 1
-            val innerStart = start + 2
-            val innerEnd = end - 2
-            builder.setSpan(StyleSpan(Typeface.BOLD), innerStart, innerEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            builder.delete(end - 2, end)
-            builder.delete(start, start + 2)
-        }
-        // italic
-        val italic = Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)")
-        italic.findAll(builder).toList().asReversed().forEach {
-            val start = it.range.first
-            val end = it.range.last + 1
-            val innerStart = start + 1
-            val innerEnd = end - 1
-            builder.setSpan(StyleSpan(Typeface.ITALIC), innerStart, innerEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            builder.delete(end - 1, end)
-            builder.delete(start, start + 1)
-        }
-        // code
-        val code = Regex("`(.+?)`")
-        code.findAll(builder).toList().asReversed().forEach {
-            val start = it.range.first
-            val end = it.range.last + 1
-            val innerStart = start + 1
-            val innerEnd = end - 1
-            builder.setSpan(TypefaceSpan("monospace"), innerStart, innerEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            builder.setSpan(ForegroundColorSpan(ContextCompat.getColor(context, R.color.codeText)), innerStart, innerEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            builder.delete(end - 1, end)
-            builder.delete(start, start + 1)
-        }
-        // links
-        val link = Regex("\\[(.+?)]\\((.+?)\\)")
-        link.findAll(builder).toList().asReversed().forEach {
-            val start = it.range.first
-            val end = it.range.last + 1
-            val textStart = start + 1
-            val textEnd = builder.indexOf("]", textStart)
-            val linkText = builder.substring(textStart, textEnd)
-            val urlStart = builder.indexOf("(", textEnd) + 1
-            val urlEnd = builder.indexOf(")", urlStart)
-            val url = builder.substring(urlStart, urlEnd)
-            builder.replace(start, end, linkText)
-            if (textView != null) {
-                builder.setSpan(object : ClickableSpan() {
-                    override fun onClick(widget: View) {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            widget.context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    }
-                    override fun updateDrawState(ds: TextPaint) {
-                        super.updateDrawState(ds)
-                        ds.isUnderlineText = true
-                        ds.color = ds.linkColor
-                    }
-                }, start, start + linkText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
-        // auto-links <http://...>
-        val autoLink = Regex("<((https?|ftp)://[^>]+)>")
-        autoLink.findAll(builder).toList().asReversed().forEach {
-            val start = it.range.first
-            val end = it.range.last + 1
-            val url = it.groupValues[1]
-            builder.replace(start, end, url)
-            if (textView != null) {
-                builder.setSpan(object : ClickableSpan() {
-                    override fun onClick(widget: View) {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            widget.context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    }
-                    override fun updateDrawState(ds: TextPaint) {
-                        super.updateDrawState(ds)
-                        ds.isUnderlineText = true
-                        ds.color = ds.linkColor
-                    }
-                }, start, start + url.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
-        // bare urls (https://... или http://... или ftp://...)
-        val bareUrl = Regex("(?<![\\w/])((https?|ftp)://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+)")
-        bareUrl.findAll(builder).toList().asReversed().forEach {
-            val start = it.range.first
-            val end = it.range.last + 1
-            val url = it.value
-            if (textView != null) {
-                builder.setSpan(object : ClickableSpan() {
-                    override fun onClick(widget: View) {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            widget.context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    }
-                    override fun updateDrawState(ds: TextPaint) {
-                        super.updateDrawState(ds)
-                        ds.isUnderlineText = true
-                        ds.color = ds.linkColor
-                    }
-                }, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val result = MarkdownParser.parseInline(text)
+        val builder = android.text.SpannableStringBuilder(result.text)
+        for (span in result.spans) {
+            when (span.type) {
+                MarkdownSpan.Type.BOLD_ITALIC -> builder
+                    .setSpan(StyleSpan(Typeface.BOLD_ITALIC), span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                MarkdownSpan.Type.BOLD -> builder
+                    .setSpan(StyleSpan(Typeface.BOLD), span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                MarkdownSpan.Type.ITALIC -> builder
+                    .setSpan(StyleSpan(Typeface.ITALIC), span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                MarkdownSpan.Type.CODE -> builder
+                    .setSpan(TypefaceSpan("monospace"), span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                MarkdownSpan.Type.STRIKETHROUGH -> builder
+                    .setSpan(StrikethroughSpan(), span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                MarkdownSpan.Type.UNDERLINE -> builder
+                    .setSpan(UnderlineSpan(), span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                MarkdownSpan.Type.LINK -> if (textView != null && span.url != null) {
+                    builder.setSpan(object : ClickableSpan() {
+                        override fun onClick(widget: View) {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(span.url))
+                                widget.context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                        override fun updateDrawState(ds: TextPaint) {
+                            super.updateDrawState(ds)
+                            ds.isUnderlineText = true
+                            ds.color = ds.linkColor
+                        }
+                    }, span.start, span.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+
             }
         }
         return builder
@@ -273,7 +203,7 @@ class MarkdownView @JvmOverloads constructor(
         while (i < lines.size && (lines[i].trim().startsWith("* ") || lines[i].trim().startsWith("- "))) {
             val item = lines[i].trim().drop(2)
             val tv = TextView(context)
-            tv.text = "• $item"
+            tv.text = context.getString(R.string.item, item)
             tv.textSize = 14f
             layout.addView(tv)
             i++
@@ -289,7 +219,7 @@ class MarkdownView @JvmOverloads constructor(
         while (i < lines.size && lines[i].trim().matches(Regex("\\d+\\. .+"))) {
             val item = lines[i].trim().replace(Regex("\\d+\\. "), "")
             val tv = TextView(context)
-            tv.text = "$num. $item"
+            tv.text = context.getString(R.string.num_item, num, item)
             tv.textSize = 14f
             layout.addView(tv)
             i++
@@ -370,14 +300,14 @@ class MarkdownView @JvmOverloads constructor(
 
     private fun createImage(line: String): View {
         // ![alt](url "title")
-        val regex = Regex("!\\[(.*?)\\]\\((.*?)(?:\\s+\"(.*?)\")?\\)")
+        val regex = Regex("!\\[(.*?)]\\((.*?)(?:\\s+\"(.*?)\")?\\)")
         val match = regex.find(line)
         val alt = match?.groups?.get(1)?.value ?: "[image]"
         val url = match?.groups?.get(2)?.value ?: ""
 
         if (url.isBlank()) {
             val tv = TextView(context)
-            tv.text = "[image: $alt]"
+            tv.text = context.getString(R.string.image, alt)
             tv.setTypeface(null, Typeface.ITALIC)
             tv.setTextColor(Color.DKGRAY)
             return tv
@@ -406,7 +336,7 @@ class MarkdownView @JvmOverloads constructor(
                         imageView.setImageBitmap(bitmap)
                     } else {
                         val tv = TextView(context)
-                        tv.text = "[image: $alt]"
+                        tv.text = context.getString(R.string.image, alt)
                         tv.setTypeface(null, Typeface.ITALIC)
                         tv.setTextColor(Color.DKGRAY)
                         val parent = imageView.parent as? LinearLayout
@@ -420,7 +350,7 @@ class MarkdownView @JvmOverloads constructor(
             } catch (e: Exception) {
                 post {
                     val tv = TextView(context)
-                    tv.text = "[image: $alt]"
+                    tv.text = context.getString(R.string.image, alt)
                     tv.setTypeface(null, Typeface.ITALIC)
                     tv.setTextColor(Color.DKGRAY)
                     val parent = imageView.parent as? LinearLayout
